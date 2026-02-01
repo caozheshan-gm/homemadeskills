@@ -1,5 +1,5 @@
 ---
-name: skill-encyclopedia-updater
+name: skill-encyclopedia-updater-universal
 description: Use when updating an Obsidian “skill百科全书/Skill Encyclopedia” markdown note after installing/removing skills or changing skill paths/descriptions, and you want a consistent entry per skill (heading + 适用/加载/用法) without adding extra notes.
 ---
 
