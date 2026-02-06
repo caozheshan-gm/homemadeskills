@@ -16,6 +16,9 @@ Pipeline:
 5. Fill YAML fields from OCR text when available, leave unknown fields empty
 6. Insert card image under `## 照片`
 
+This version is self-contained and does not import repository `scripts/*`.
+Dependency: `tesseract` must be available in PATH.
+
 ## Run
 
 ```bash
