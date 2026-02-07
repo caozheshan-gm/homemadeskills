@@ -379,16 +379,39 @@ def inject_image_under_photo(text: str, embed: str) -> str:
     lines = text.splitlines()
     out: list[str] = []
     inserted = False
-    for i, line in enumerate(lines):
-        out.append(line)
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         stripped = line.strip()
-        if not inserted and (stripped.startswith("## 照片") or stripped.startswith("## 图片")):
-            next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
-            if next_line != embed:
-                out.append(embed)
+        is_photo_field = (
+            stripped.startswith("## 照片")
+            or stripped.startswith("## 图片")
+            or stripped.startswith("照片::")
+            or stripped.startswith("图片::")
+        )
+
+        if not inserted and is_photo_field:
+            # Keep inline-field behavior: image goes immediately after `::` on the same line.
+            if "::" in line:
+                prefix = line.split("::", 1)[0] + "::"
+                out.append(f"{prefix} {embed}")
+            else:
+                # Backward compatibility with old `照片:` style templates.
+                out.append(re.sub(r":\s*$", "::", line) + f" {embed}")
             inserted = True
+
+            # If an older version already inserted the image on the next line, skip it.
+            if i + 1 < len(lines) and lines[i + 1].strip().startswith("![["):
+                i += 2
+                continue
+            i += 1
+            continue
+
+        out.append(line)
+        i += 1
+
     if not inserted:
-        out.extend(["", "## 照片:", embed])
+        out.extend(["", f"## 照片:: {embed}"])
     return "\n".join(out).rstrip() + "\n"
 
 
