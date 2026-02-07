@@ -112,6 +112,31 @@ def template_inline_fields(template_path: Path) -> list[tuple[str, str]]:
     return fields
 
 
+def template_dataview_block(template_path: Path) -> list[str]:
+    lines = template_path.read_text(encoding="utf-8").splitlines()
+    fm = parse_frontmatter(lines)
+    if fm is None:
+        raise SystemExit(f"Template frontmatter not found: {template_path}")
+    body = lines[fm.end + 1 :]
+
+    start = None
+    end = None
+    for i, line in enumerate(body):
+        if line.strip().lower() == "```dataview":
+            start = i
+            break
+    if start is None:
+        return []
+
+    for j in range(start + 1, len(body)):
+        if body[j].strip() == "```":
+            end = j
+            break
+    if end is None:
+        return []
+    return body[start : end + 1]
+
+
 def reorder_frontmatter(
     original_fm_lines: list[str],
     tmpl_order: list[str],
@@ -205,11 +230,52 @@ def sync_inline_field_structure(
     return kept[:first_insert_pos] + synced_lines + kept[first_insert_pos:]
 
 
+def sync_dataview_block(body_lines: list[str], dv_block: list[str]) -> list[str]:
+    if not dv_block:
+        return body_lines
+
+    cleaned: list[str] = []
+    i = 0
+    while i < len(body_lines):
+        if body_lines[i].strip().lower() == "```dataview":
+            i += 1
+            while i < len(body_lines) and body_lines[i].strip() != "```":
+                i += 1
+            if i < len(body_lines) and body_lines[i].strip() == "```":
+                i += 1
+            continue
+        cleaned.append(body_lines[i])
+        i += 1
+
+    insert_at = len(cleaned)
+    for idx, line in enumerate(cleaned):
+        if line.strip().startswith("## 需求产品::"):
+            insert_at = idx + 1
+            break
+
+    prefix = cleaned[:insert_at]
+    suffix = cleaned[insert_at:]
+
+    while prefix and prefix[-1].strip() == "":
+        prefix.pop()
+    if prefix:
+        prefix.append("")
+    merged = prefix + dv_block
+    if suffix:
+        if merged and merged[-1].strip() != "":
+            merged.append("")
+        while suffix and suffix[0].strip() == "":
+            suffix = suffix[1:]
+        merged += suffix
+    return merged
+
+
 def process_note(
     path: Path,
     tmpl_order: list[str],
     tmpl_values: dict[str, str],
     tmpl_inline_fields: list[tuple[str, str]],
+    tmpl_dataview_block: list[str],
     yaml_renames: dict[str, str],
     inline_renames: dict[str, str],
     apply: bool,
@@ -232,6 +298,7 @@ def process_note(
         tmpl_inline_fields,
         inline_renames=inline_renames,
     )
+    new_body_lines = sync_dataview_block(new_body_lines, tmpl_dataview_block)
 
     rebuilt = ["---", *new_fm_lines, "---", *new_body_lines]
     new_text = "\n".join(rebuilt).rstrip() + "\n"
@@ -273,6 +340,7 @@ def main() -> int:
 
     order, tmpl_values = template_key_order_values(template)
     inline_fields = template_inline_fields(template)
+    dataview_block = template_dataview_block(template)
     yaml_renames = parse_rename_pairs(args.yaml_rename, "--yaml-rename")
     inline_renames = parse_rename_pairs(args.inline_rename, "--inline-rename")
     validate_rename_targets(
@@ -289,6 +357,7 @@ def main() -> int:
             order,
             tmpl_values,
             tmpl_inline_fields=inline_fields,
+            tmpl_dataview_block=dataview_block,
             yaml_renames=yaml_renames,
             inline_renames=inline_renames,
             apply=args.apply,
